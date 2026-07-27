@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # --- Director agent (Anthropic) ---
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
-    director_model: str = Field(default="claude-sonnet-5", alias="DIRECTOR_MODEL")
+    director_model: str = Field(default="claude-opus-5", alias="DIRECTOR_MODEL")
 
     # --- Persistence backend ---
     backend: Literal["memory", "airtable"] = Field(default="memory", alias="BACKEND")

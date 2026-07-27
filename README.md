@@ -18,7 +18,7 @@ src/creative_director/
   repositories/        [Step 3] Repository interface + memory & Airtable backends
   providers/           Pluggable generation interface + image providers (stub, OpenAI) + registry
   storage/             Object-storage abstraction (local disk now, S3/R2 later)
-  orchestration/       [Step 5+] LangGraph director pipeline (Plan/Generate/Critique/Review)
+  orchestration/       LangGraph director pipeline — Plan node live (Generate/Critique/Review next)
   api/                 FastAPI CRUD routers + static API-key auth
 ```
 
@@ -80,13 +80,26 @@ schema-as-code definitions (idempotent):
 python -m creative_director.repositories.airtable.bootstrap
 ```
 
+### Trying the director's Plan stage
+
+The Plan node turns a brief into a schema-valid asset plan via Claude
+(`messages.parse` structured outputs). Run it against sample briefs:
+
+```bash
+python scripts/plan_demo.py
+```
+
+With `ANTHROPIC_API_KEY` set it uses the real director (`DIRECTOR_MODEL`,
+default `claude-opus-5`); without a key it falls back to a deterministic
+`FakeDirector` so the LangGraph wiring runs offline.
+
 ## Build order / status
 
 1. ✅ Data model + domain layer
 2. ✅ Project scaffold (structure, deps, config)
 3. ✅ Repository interface + memory & Airtable backends (schema-as-code + bootstrap) + FastAPI CRUD
 4. ✅ Provider interface + OpenAI `gpt-image-1` provider (+ keyless stub) + storage abstraction
-5. ⬜ Director agent: Plan node (brief → asset plan), verified in isolation
+5. ✅ Director agent: LangGraph Plan node (brief → asset plan), verified in isolation
 6. ⬜ Generate node → image provider
 7. ⬜ Self-critique node
 8. ⬜ Review endpoint/CLI (approve / regenerate loop)
