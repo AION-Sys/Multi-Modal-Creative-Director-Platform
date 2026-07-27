@@ -7,8 +7,8 @@ from .director import (
     FakeDirector,
     PlanBrief,
 )
-from .graph import build_plan_graph
-from .nodes import make_plan_node, normalize_assets
+from .graph import build_pipeline_graph, build_plan_graph
+from .nodes import make_generate_node, make_plan_node, normalize_assets
 from .schemas import AssetPlanResult, PlannedAsset
 from .state import DirectorState
 
@@ -21,7 +21,9 @@ __all__ = [
     "FakeDirector",
     "PlanBrief",
     "PlannedAsset",
+    "build_pipeline_graph",
     "build_plan_graph",
+    "make_generate_node",
     "make_plan_node",
     "normalize_assets",
 ]

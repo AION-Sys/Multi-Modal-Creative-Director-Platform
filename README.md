@@ -93,6 +93,20 @@ With `ANTHROPIC_API_KEY` set it uses the real director (`DIRECTOR_MODEL`,
 default `claude-opus-5`); without a key it falls back to a deterministic
 `FakeDirector` so the LangGraph wiring runs offline.
 
+### Trying the full Plan → Generate pipeline
+
+Runs the whole loop keyless (memory backend, stub image provider, local disk):
+plans a brief, generates + stores real image bytes, persists Assets and
+Versions.
+
+```bash
+python scripts/pipeline_demo.py   # writes real PNGs under ./.data/media/
+```
+
+Image assets are generated and stored; modalities without a registered provider
+(copy/video/audio today) are reported as skipped — the pluggable interface at
+work.
+
 ## Build order / status
 
 1. ✅ Data model + domain layer
@@ -100,7 +114,7 @@ default `claude-opus-5`); without a key it falls back to a deterministic
 3. ✅ Repository interface + memory & Airtable backends (schema-as-code + bootstrap) + FastAPI CRUD
 4. ✅ Provider interface + OpenAI `gpt-image-1` provider (+ keyless stub) + storage abstraction
 5. ✅ Director agent: LangGraph Plan node (brief → asset plan), verified in isolation
-6. ⬜ Generate node → image provider
+6. ✅ Generate node → image provider (persists Assets + Versions, stores media)
 7. ⬜ Self-critique node
 8. ⬜ Review endpoint/CLI (approve / regenerate loop)
 9. ⬜ Second modality
