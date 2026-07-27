@@ -27,4 +27,7 @@ class DirectorState(TypedDict, total=False):
     asset_ids: list[str]
     # Per-asset generation results: generated / skipped / failed (+ version_id, output_ref).
     generated: list[dict]
+    # --- Critique stage output ---
+    # Per-version verdicts: {version_id, asset_id, verdict, score}.
+    critiques: list[dict]
     error: str | None

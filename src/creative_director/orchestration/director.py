@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
 from ..domain.enums import Modality
-from .schemas import AssetPlanResult
+from .schemas import AssetPlanResult, CritiqueResult
 
 if TYPE_CHECKING:  # avoid importing the SDK unless the real director is used
     from anthropic import AsyncAnthropic
@@ -30,12 +30,33 @@ class PlanBrief:
     workspace_name: str = ""
 
 
+@dataclass(frozen=True)
+class CritiqueRequest:
+    """One generated output to be reviewed against the brief.
+
+    For images, `image` carries the bytes (vision critique); for copy, `text`
+    carries the generated text. `spec` is the Asset's spec (description/prompt/
+    rationale) so the director judges against what was asked for.
+    """
+
+    goal: str
+    asset_name: str
+    modality: Modality
+    spec: dict
+    image: bytes | None = None
+    image_content_type: str | None = None
+    text: str | None = None
+
+
 class DirectorError(Exception):
     pass
 
 
 class DirectorAgent(Protocol):
     async def plan(self, brief: PlanBrief) -> AssetPlanResult:
+        ...
+
+    async def critique(self, request: CritiqueRequest) -> CritiqueResult:
         ...
 
 
@@ -49,6 +70,33 @@ _SYSTEM_PROMPT = (
     "in the requested modalities. Prefer a focused plan of high-impact assets over "
     "an exhaustive one."
 )
+
+
+_CRITIQUE_SYSTEM = (
+    "You are a creative director reviewing a generated asset against its brief. "
+    "Judge whether the output satisfies the goal and the asset's spec (its intended "
+    "description, the generation prompt, and its rationale). Return a verdict of "
+    "'pass' if it's good enough to move to human review, or 'regenerate' if it "
+    "should be redone. Give an honest quality score, concise notes on what works "
+    "and what doesn't, and — only when regenerating — concrete prompt/param "
+    "adjustments to try next."
+)
+
+
+def _render_critique(request: CritiqueRequest) -> str:
+    spec = request.spec or {}
+    lines = [
+        f"Goal: {request.goal}",
+        f"Asset: {request.asset_name} ({request.modality.value})",
+        f"Intended description: {spec.get('description', '')}",
+        f"Generation prompt used: {spec.get('prompt', '')}",
+        f"Rationale: {spec.get('rationale', '')}",
+    ]
+    if request.image is not None:
+        lines.append("\nThe generated image is attached. Review it against the above.")
+    if request.text:
+        lines.append("\nReview the generated copy provided below against the above.")
+    return "\n".join(lines)
 
 
 def _render_brief(brief: PlanBrief) -> str:
@@ -108,6 +156,38 @@ class AnthropicDirector:
             )
         return parsed
 
+    async def critique(self, request: CritiqueRequest) -> CritiqueResult:
+        import base64
+
+        content: list[dict] = [{"type": "text", "text": _render_critique(request)}]
+        if request.image is not None:
+            content.append(
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": request.image_content_type or "image/png",
+                        "data": base64.b64encode(request.image).decode(),
+                    },
+                }
+            )
+        if request.text:
+            content.append({"type": "text", "text": f"Generated copy:\n{request.text}"})
+
+        response = await self._client.messages.parse(
+            model=self._model,
+            max_tokens=self._max_tokens,
+            system=_CRITIQUE_SYSTEM,
+            messages=[{"role": "user", "content": content}],
+            output_format=CritiqueResult,
+        )
+        parsed = response.parsed_output
+        if parsed is None:
+            raise DirectorError(
+                f"Director returned no parseable critique (stop={response.stop_reason})"
+            )
+        return parsed
+
 
 class FakeDirector:
     """Deterministic director for tests/keyless demos.
@@ -116,8 +196,11 @@ class FakeDirector:
     Plan node and graph can be exercised without any network call.
     """
 
-    def __init__(self, *, per_modality: int = 1) -> None:
+    def __init__(
+        self, *, per_modality: int = 1, critique_verdict: str = "pass"
+    ) -> None:
         self._per_modality = per_modality
+        self._critique_verdict = critique_verdict
 
     async def plan(self, brief: PlanBrief) -> AssetPlanResult:
         from .schemas import PlannedAsset
@@ -139,4 +222,13 @@ class FakeDirector:
         return AssetPlanResult(
             summary=f"Plan of {len(assets)} asset(s) for: {brief.goal}",
             assets=assets,
+        )
+
+    async def critique(self, request: CritiqueRequest) -> CritiqueResult:
+        passed = self._critique_verdict == "pass"
+        return CritiqueResult(
+            verdict="pass" if passed else "regenerate",
+            score=0.9 if passed else 0.4,
+            notes=f"Reviewed '{request.asset_name}' against the goal.",
+            suggestions="" if passed else "Increase contrast and tighten to the brand palette.",
         )

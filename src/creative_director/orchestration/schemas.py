@@ -9,6 +9,8 @@ free-form dicts) because structured outputs require `additionalProperties: false
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from ..domain.enums import Modality
@@ -32,3 +34,17 @@ class AssetPlanResult(BaseModel):
 
     summary: str = Field(description="One-paragraph overview of the plan.")
     assets: list[PlannedAsset] = Field(description="The ordered list of assets to produce.")
+
+
+class CritiqueResult(BaseModel):
+    """The director's self-critique of one generated output against the brief."""
+
+    verdict: Literal["pass", "regenerate"] = Field(
+        description="'pass' if the output satisfies the brief/spec, else 'regenerate'."
+    )
+    score: float = Field(description="Quality score from 0.0 (poor) to 1.0 (excellent).")
+    notes: str = Field(description="What works and what doesn't, relative to the brief.")
+    suggestions: str = Field(
+        description="If regenerate: concrete prompt/param adjustments to try next. "
+        "Empty when the verdict is pass."
+    )

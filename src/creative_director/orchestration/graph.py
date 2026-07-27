@@ -13,7 +13,7 @@ from ..providers.base import ProviderRegistry
 from ..repositories.base import RepositorySet
 from ..storage.base import ObjectStorage
 from .director import DirectorAgent
-from .nodes import make_generate_node, make_plan_node
+from .nodes import make_critique_node, make_generate_node, make_plan_node
 from .state import DirectorState
 
 
@@ -32,15 +32,18 @@ def build_pipeline_graph(
     providers: ProviderRegistry,
     storage: ObjectStorage,
 ):
-    """Compile the Plan -> Generate pipeline: entry -> plan -> generate -> END.
+    """Compile the pipeline: entry -> plan -> generate -> critique -> END.
 
-    Persists Assets and Versions as it goes. Critique and Review nodes append
-    onto this same graph in later steps.
+    Persists Assets and Versions as it goes, and annotates each generated Version
+    with a pass/regenerate verdict. The Review stage (approve / regenerate loop)
+    appends onto this same graph next.
     """
     graph = StateGraph(DirectorState)
     graph.add_node("plan", make_plan_node(director))
     graph.add_node("generate", make_generate_node(repos, providers, storage))
+    graph.add_node("critique", make_critique_node(director, repos, storage))
     graph.set_entry_point("plan")
     graph.add_edge("plan", "generate")
-    graph.add_edge("generate", END)
+    graph.add_edge("generate", "critique")
+    graph.add_edge("critique", END)
     return graph.compile()

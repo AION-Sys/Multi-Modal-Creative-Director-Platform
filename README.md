@@ -105,7 +105,9 @@ python scripts/pipeline_demo.py   # writes real PNGs under ./.data/media/
 
 Image assets are generated and stored; modalities without a registered provider
 (copy/video/audio today) are reported as skipped — the pluggable interface at
-work.
+work. Each generated Version is then self-critiqued by the director (a
+pass/regenerate verdict + notes recorded on the Version); image critique passes
+the bytes to Claude as vision input.
 
 ## Build order / status
 
@@ -115,7 +117,7 @@ work.
 4. ✅ Provider interface + OpenAI `gpt-image-1` provider (+ keyless stub) + storage abstraction
 5. ✅ Director agent: LangGraph Plan node (brief → asset plan), verified in isolation
 6. ✅ Generate node → image provider (persists Assets + Versions, stores media)
-7. ⬜ Self-critique node
+7. ✅ Self-critique node (director reviews each Version → pass / regenerate verdict)
 8. ⬜ Review endpoint/CLI (approve / regenerate loop)
 9. ⬜ Second modality
 

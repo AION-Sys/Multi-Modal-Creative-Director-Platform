@@ -71,6 +71,11 @@ async def main() -> None:
         else:
             print(f"  ❌ {r['status']:<9} asset {r['asset_id']} — {r.get('error')}")
 
+    if result.get("critiques"):
+        print("\nCRITIQUE:")
+        for c in result["critiques"]:
+            print(f"  {c['verdict']:<10} score={c['score']}  version={c['version_id']}")
+
     versions = await repos.versions.list(workspace_id=ws.id)
     print(f"\n{len(versions)} Version row(s) persisted; "
           f"media under ./.data/media/")
