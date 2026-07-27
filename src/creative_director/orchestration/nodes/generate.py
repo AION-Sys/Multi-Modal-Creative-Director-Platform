@@ -1,34 +1,22 @@
 """Generate node: asset plan -> generated, stored, versioned outputs.
 
-For each planned asset this node:
-  1. persists an Asset row (status=generating),
-  2. routes it to the provider registered for its modality,
-  3. generates bytes, writes them to object storage,
-  4. records an immutable Version (output_ref, provider, model) and moves the
-     asset to `review`.
-
-Modalities with no registered provider yet (copy/video/audio) are left planned
-and reported as skipped — that's the pluggable interface doing its job, not an
-error. Per-asset failures are captured on the Version and in the result list so
-one bad generation never sinks the whole run.
+For each planned asset it persists an Asset (status=generating) then delegates to
+`generate_version_for_asset` — the same operation the Review stage's regenerate
+path uses. Modalities with no provider are reported as skipped; per-asset failures
+are captured, never fatal.
 """
 
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
-from ...domain.enums import AssetStatus, Modality, VersionStatus
-from ...domain.models import Asset, Version
-from ...providers.base import GenerationRequest, ProviderError, ProviderRegistry
-from ...providers.service import media_key
+from ...domain.enums import AssetStatus, Modality
+from ...domain.models import Asset
+from ...providers.base import ProviderRegistry
 from ...repositories.base import RepositorySet
 from ...storage.base import ObjectStorage
+from ..operations import generate_version_for_asset
 from ..state import DirectorState
-
-# Default generation params per modality (providers ignore what they don't use).
-_DEFAULT_PARAMS: dict[Modality, dict] = {
-    Modality.IMAGE: {"size": "1024x1024"},
-}
 
 
 def make_generate_node(
@@ -47,89 +35,25 @@ def make_generate_node(
         results: list[dict] = []
 
         for spec in planned:
-            modality = Modality(spec["modality"])
             asset = await repos.assets.create(
                 Asset(
                     workspace_id=workspace_id,
                     project_id=project_id,
                     name=spec["name"],
-                    modality=modality,
+                    modality=Modality(spec["modality"]),
                     spec=spec["spec"],
                     order=spec["order"],
                     status=AssetStatus.GENERATING,
                 )
             )
             asset_ids.append(asset.id)
-
-            try:
-                provider = providers.for_modality(modality)
-            except ProviderError:
-                results.append(
-                    {"asset_id": asset.id, "status": "skipped",
-                     "reason": f"no provider for modality '{modality.value}'"}
-                )
-                continue
-
             results.append(
-                await _generate_one(repos, storage, provider, asset, spec, workspace_id)
+                await generate_version_for_asset(
+                    repos, providers, storage, asset, workspace_id,
+                    prompt=spec["spec"].get("prompt", ""),
+                )
             )
 
         return {"asset_ids": asset_ids, "generated": results, "error": None}
 
     return generate_node
-
-
-async def _generate_one(
-    repos: RepositorySet,
-    storage: ObjectStorage,
-    provider,
-    asset: Asset,
-    spec: dict,
-    workspace_id: str,
-) -> dict:
-    prompt = spec["spec"].get("prompt", "")
-    params = _DEFAULT_PARAMS.get(asset.modality, {})
-    # Record the attempt as a pending Version before doing the work.
-    version = await repos.versions.create(
-        Version(
-            workspace_id=workspace_id,
-            asset_id=asset.id,
-            provider=provider.name,
-            prompt=prompt,
-            params=params,
-            status=VersionStatus.PENDING,
-        )
-    )
-    try:
-        result = await provider.generate(
-            GenerationRequest(modality=asset.modality, prompt=prompt, params=params)
-        )
-        key = media_key(workspace_id, asset.id, version.id, result.ext)
-        ref = await storage.save(key, result.data, content_type=result.content_type)
-    except Exception as exc:
-        await repos.versions.update(
-            version.id, {"status": VersionStatus.FAILED.value}, workspace_id=workspace_id
-        )
-        return {"asset_id": asset.id, "version_id": version.id,
-                "status": "failed", "error": str(exc)}
-
-    await repos.versions.update(
-        version.id,
-        {
-            "output_ref": ref,
-            "model": result.model,
-            "status": VersionStatus.READY.value,
-        },
-        workspace_id=workspace_id,
-    )
-    await repos.assets.update(
-        asset.id, {"status": AssetStatus.REVIEW.value}, workspace_id=workspace_id
-    )
-    return {
-        "asset_id": asset.id,
-        "version_id": version.id,
-        "status": "generated",
-        "output_ref": ref,
-        "provider": provider.name,
-        "model": result.model,
-    }

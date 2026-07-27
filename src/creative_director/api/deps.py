@@ -15,6 +15,22 @@ def get_repos(request: Request) -> RepositorySet:
     return request.app.state.repos
 
 
+def get_providers(request: Request):
+    return request.app.state.providers
+
+
+def get_storage(request: Request):
+    return request.app.state.storage
+
+
+def get_director(request: Request):
+    return request.app.state.director
+
+
+def get_review(request: Request):
+    return request.app.state.review
+
+
 async def require_api_key(
     request: Request, x_api_key: str | None = Header(default=None)
 ) -> None:

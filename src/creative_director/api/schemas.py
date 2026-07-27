@@ -88,3 +88,13 @@ class VersionUpdate(BaseModel):
     critique: dict | None = None
     verdict: VersionVerdict | None = None
     status: VersionStatus | None = None
+
+
+# --- Review loop ---
+class RegenerateRequest(BaseModel):
+    # Human tweak appended to the prompt (on top of the critique's suggestions).
+    prompt_suffix: str | None = None
+    # Provider param overrides for the regeneration.
+    params: dict | None = None
+    # Re-run self-critique on the new version.
+    recritique: bool = False

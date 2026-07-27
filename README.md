@@ -69,7 +69,19 @@ POST   /workspaces
 GET    /workspaces/{workspace_id}/projects
 POST   /workspaces/{workspace_id}/assets          # body carries project_id
 GET    /workspaces/{workspace_id}/versions?asset_id=...
+
+# Run the director pipeline, then review its output:
+POST   /workspaces/{workspace_id}/projects/{project_id}/run   # plan→generate→critique
+GET    /workspaces/{workspace_id}/review?project_id=...        # assets awaiting review
+POST   /workspaces/{workspace_id}/versions/{version_id}/approve
+POST   /workspaces/{workspace_id}/assets/{asset_id}/regenerate # branch a new version
+POST   /workspaces/{workspace_id}/assets/{asset_id}/reject
 ```
+
+`…/run` executes the LangGraph pipeline for a project and records a
+`PipelineRun` (status `awaiting_review`). Regeneration folds the critique's
+suggestions (plus any human tweak) into the prompt and produces a **new** Version
+linked via `parent_version_id` — the rejected output is never overwritten.
 
 ### Provisioning Airtable (when BACKEND=airtable)
 
@@ -109,6 +121,15 @@ work. Each generated Version is then self-critiqued by the director (a
 pass/regenerate verdict + notes recorded on the Version); image critique passes
 the bytes to Claude as vision input.
 
+### Trying the full review loop
+
+Runs a project, lists what's awaiting review, regenerates one asset (branching a
+new version), then approves it — all in-process and keyless:
+
+```bash
+python scripts/review_demo.py
+```
+
 ## Build order / status
 
 1. ✅ Data model + domain layer
@@ -118,7 +139,7 @@ the bytes to Claude as vision input.
 5. ✅ Director agent: LangGraph Plan node (brief → asset plan), verified in isolation
 6. ✅ Generate node → image provider (persists Assets + Versions, stores media)
 7. ✅ Self-critique node (director reviews each Version → pass / regenerate verdict)
-8. ⬜ Review endpoint/CLI (approve / regenerate loop)
+8. ✅ Review loop: run pipeline + approve / regenerate / reject endpoints + PipelineRun
 9. ⬜ Second modality
 
 ## Key decisions locked in
