@@ -16,8 +16,8 @@ src/creative_director/
     enums.py           Canonical status/modality enums (portable string values)
     models.py          Workspace, Project, Asset, Version, PipelineRun
   repositories/        [Step 3] Repository interface + memory & Airtable backends
-  providers/           [Step 4] Pluggable generation interface + image providers
-  storage/             [Step 4] Object-storage abstraction (local disk now, S3/R2 later)
+  providers/           Pluggable generation interface + image providers (stub, OpenAI) + registry
+  storage/             Object-storage abstraction (local disk now, S3/R2 later)
   orchestration/       [Step 5+] LangGraph director pipeline (Plan/Generate/Critique/Review)
   api/                 FastAPI CRUD routers + static API-key auth
 ```
@@ -85,7 +85,7 @@ python -m creative_director.repositories.airtable.bootstrap
 1. ✅ Data model + domain layer
 2. ✅ Project scaffold (structure, deps, config)
 3. ✅ Repository interface + memory & Airtable backends (schema-as-code + bootstrap) + FastAPI CRUD
-4. ⬜ Provider interface + OpenAI `gpt-image-1` image provider + storage abstraction
+4. ✅ Provider interface + OpenAI `gpt-image-1` provider (+ keyless stub) + storage abstraction
 5. ⬜ Director agent: Plan node (brief → asset plan), verified in isolation
 6. ⬜ Generate node → image provider
 7. ⬜ Self-critique node
