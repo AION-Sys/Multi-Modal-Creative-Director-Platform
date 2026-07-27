@@ -59,36 +59,40 @@ async def test_run_project_records_pipeline_run_and_moves_project(repos, provide
     assert proj.status == ProjectStatus.REVIEW
 
 
-async def test_pending_lists_image_asset_awaiting_review(repos, providers, storage):
+async def test_pending_lists_generated_assets_awaiting_review(repos, providers, storage):
     ws, proj, _ = await _run(repos, providers, storage, FakeDirector())
     review = ReviewService(repos, providers, storage, FakeDirector())
 
     items = await review.pending(ws.id, proj.id)
-    # Image asset is in review; the skipped copy asset is not.
-    assert len(items) == 1
-    assert items[0].asset.modality == Modality.IMAGE
-    assert items[0].version is not None
-    assert items[0].version.verdict == VersionVerdict.PASS
+    # Both image and copy generated, so both await review.
+    assert {i.asset.modality for i in items} == {Modality.IMAGE, Modality.COPY}
+    assert all(i.version is not None for i in items)
+    assert all(i.version.verdict == VersionVerdict.PASS for i in items)
+
+
+def _image_item(items):
+    return next(i for i in items if i.asset.modality == Modality.IMAGE)
 
 
 async def test_approve_locks_the_asset(repos, providers, storage):
     ws, proj, _ = await _run(repos, providers, storage, FakeDirector())
     review = ReviewService(repos, providers, storage, FakeDirector())
 
-    [item] = await review.pending(ws.id, proj.id)
+    item = _image_item(await review.pending(ws.id, proj.id))
     out = await review.approve(ws.id, item.version.id)
     assert out["status"] == "approved"
 
     asset = await repos.assets.get(item.asset.id, workspace_id=ws.id)
     assert asset.status == AssetStatus.APPROVED
-    # Approved asset no longer appears as pending.
-    assert await review.pending(ws.id, proj.id) == []
+    # Approved asset no longer appears as pending (copy still does).
+    remaining = await review.pending(ws.id, proj.id)
+    assert all(i.asset.id != item.asset.id for i in remaining)
 
 
 async def test_reject_marks_asset_rejected(repos, providers, storage):
     ws, proj, _ = await _run(repos, providers, storage, FakeDirector())
     review = ReviewService(repos, providers, storage, FakeDirector())
-    [item] = await review.pending(ws.id, proj.id)
+    item = _image_item(await review.pending(ws.id, proj.id))
 
     out = await review.reject(ws.id, item.asset.id)
     assert out["status"] == "rejected"
@@ -101,7 +105,7 @@ async def test_regenerate_branches_a_new_version(repos, providers, storage):
     director = FakeDirector(critique_verdict="regenerate")
     ws, proj, _ = await _run(repos, providers, storage, director)
     review = ReviewService(repos, providers, storage, director)
-    [item] = await review.pending(ws.id, proj.id)
+    item = _image_item(await review.pending(ws.id, proj.id))
     v1 = item.version
 
     out = await review.regenerate(ws.id, item.asset.id, prompt_suffix="more contrast")
@@ -122,7 +126,7 @@ async def test_regenerate_with_recritique(repos, providers, storage):
     director = FakeDirector(critique_verdict="regenerate")
     ws, proj, _ = await _run(repos, providers, storage, director)
     review = ReviewService(repos, providers, storage, director)
-    [item] = await review.pending(ws.id, proj.id)
+    item = _image_item(await review.pending(ws.id, proj.id))
 
     out = await review.regenerate(ws.id, item.asset.id, recritique=True)
     assert out["critique"]["verdict"] == "regenerate"

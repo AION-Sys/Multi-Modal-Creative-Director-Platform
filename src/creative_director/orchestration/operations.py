@@ -111,9 +111,12 @@ async def critique_version(
 ) -> dict:
     """Review one Version against the brief and record the verdict on it."""
     image = image_ct = text = None
-    if asset.modality == Modality.IMAGE and version.output_ref:
-        image = await storage.load(version.output_ref)
-        image_ct = content_type_for_ref(version.output_ref)
+    if version.output_ref:
+        if asset.modality == Modality.IMAGE:
+            image = await storage.load(version.output_ref)
+            image_ct = content_type_for_ref(version.output_ref)
+        elif asset.modality == Modality.COPY:
+            text = (await storage.load(version.output_ref)).decode("utf-8", errors="replace")
 
     critique = await director.critique(
         CritiqueRequest(

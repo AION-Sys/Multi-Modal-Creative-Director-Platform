@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     image_provider: Literal["openai", "stub"] = Field(default="stub", alias="IMAGE_PROVIDER")
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
 
+    # --- Text/copy generation provider ---
+    text_provider: Literal["anthropic", "stub"] = Field(default="stub", alias="TEXT_PROVIDER")
+    text_model: str = Field(default="claude-opus-5", alias="TEXT_MODEL")
+
     # --- Object storage ---
     storage_backend: Literal["local"] = Field(default="local", alias="STORAGE_BACKEND")
     storage_local_dir: str = Field(default="./.data/media", alias="STORAGE_LOCAL_DIR")

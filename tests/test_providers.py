@@ -8,10 +8,12 @@ import pytest
 from creative_director.config import Settings
 from creative_director.domain.enums import Modality
 from creative_director.providers import (
+    AnthropicTextProvider,
     GenerationRequest,
     OpenAIImageProvider,
     ProviderError,
     StubImageProvider,
+    StubTextProvider,
     build_provider_registry,
     generate_and_store,
     media_key,
@@ -52,6 +54,77 @@ def test_registry_defaults_to_stub_for_images():
     provider = registry.for_modality(Modality.IMAGE)
     assert provider.name == "stub-image"
     assert registry.get("stub-image") is provider
+
+
+def test_registry_routes_copy_to_a_text_provider():
+    stub_reg = build_provider_registry(Settings(_env_file=None, text_provider="stub"))
+    assert stub_reg.for_modality(Modality.COPY).name == "stub-text"
+
+    anthropic_reg = build_provider_registry(
+        Settings(_env_file=None, text_provider="anthropic", anthropic_api_key="sk-x")
+    )
+    assert anthropic_reg.for_modality(Modality.COPY).name == "anthropic-text"
+    # stub stays reachable by name.
+    assert anthropic_reg.get("stub-text").name == "stub-text"
+
+
+async def test_stub_text_provider_emits_text_bytes():
+    result = await StubTextProvider().generate(
+        GenerationRequest(modality=Modality.COPY, prompt="Announce the spring line")
+    )
+    assert result.ext == "txt"
+    assert result.content_type.startswith("text/plain")
+    assert result.data.decode("utf-8") == "[stub copy] Announce the spring line"
+
+
+async def test_anthropic_text_provider_decodes_and_sends_prompt():
+    captured = {}
+
+    class _Block:
+        type = "text"
+
+        def __init__(self, text):
+            self.text = text
+
+    class _Resp:
+        stop_reason = "end_turn"
+
+        def __init__(self, text):
+            self.content = [_Block(text)]
+
+    class _Messages:
+        async def create(self, **kwargs):
+            captured.update(kwargs)
+            return _Resp("Step into spring. Lightweight, low-impact, all-day.")
+
+    class _Client:
+        messages = _Messages()
+
+    provider = AnthropicTextProvider(client=_Client(), model="claude-opus-5")
+    result = await provider.generate(
+        GenerationRequest(modality=Modality.COPY, prompt="Write a hero tagline")
+    )
+    assert result.model == "claude-opus-5"
+    assert result.data.decode("utf-8").startswith("Step into spring")
+    assert captured["model"] == "claude-opus-5"
+    assert captured["messages"][0]["content"] == "Write a hero tagline"
+
+
+async def test_anthropic_text_provider_raises_on_refusal():
+    class _Resp:
+        stop_reason = "refusal"
+        content = []
+
+    class _Messages:
+        async def create(self, **kwargs):
+            return _Resp()
+
+    class _Client:
+        messages = _Messages()
+
+    provider = AnthropicTextProvider(client=_Client())
+    with pytest.raises(ProviderError):
+        await provider.generate(GenerationRequest(modality=Modality.COPY, prompt="x"))
 
 
 def test_registry_unknown_provider_raises():

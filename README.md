@@ -16,7 +16,7 @@ src/creative_director/
     enums.py           Canonical status/modality enums (portable string values)
     models.py          Workspace, Project, Asset, Version, PipelineRun
   repositories/        [Step 3] Repository interface + memory & Airtable backends
-  providers/           Pluggable generation interface + image providers (stub, OpenAI) + registry
+  providers/           Pluggable generation interface + image (stub, OpenAI) & copy (stub, Claude) providers + registry
   storage/             Object-storage abstraction (local disk now, S3/R2 later)
   orchestration/       LangGraph director pipeline — Plan node live (Generate/Critique/Review next)
   api/                 FastAPI CRUD routers + static API-key auth
@@ -52,8 +52,9 @@ pytest -q
 ```
 
 Configuration is entirely env-driven (see `.env.example`): swap
-`BACKEND=memory|airtable`, `IMAGE_PROVIDER=stub|openai`, etc. without code
-changes.
+`BACKEND=memory|airtable`, `IMAGE_PROVIDER=stub|openai`,
+`TEXT_PROVIDER=stub|anthropic`, etc. without code changes. Adding a modality is a
+new `GenerationProvider` registered in the factory — nothing else changes.
 
 ### Running the API
 
@@ -140,7 +141,7 @@ python scripts/review_demo.py
 6. ✅ Generate node → image provider (persists Assets + Versions, stores media)
 7. ✅ Self-critique node (director reviews each Version → pass / regenerate verdict)
 8. ✅ Review loop: run pipeline + approve / regenerate / reject endpoints + PipelineRun
-9. ⬜ Second modality
+9. ✅ Second modality: copy/text provider (Claude, + keyless stub) — copy assets now generate & critique
 
 ## Key decisions locked in
 

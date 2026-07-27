@@ -92,23 +92,24 @@ async def test_generate_skips_modality_without_a_provider(repos, providers, stor
     ws, proj = await _workspace_and_project(repos)
     node = make_generate_node(repos, providers, storage)
 
+    # image + copy have providers; video does not.
     update = await node(
         {
             "workspace_id": ws.id,
             "project_id": proj.id,
-            "planned_assets": [_planned("image", 0), _planned("copy", 1)],
+            "planned_assets": [_planned("image", 0), _planned("video", 1)],
         }
     )
 
     by_status = {r["status"] for r in update["generated"]}
     assert by_status == {"generated", "skipped"}
-    copy_result = next(r for r in update["generated"] if r["status"] == "skipped")
-    assert "no provider" in copy_result["reason"]
+    video_result = next(r for r in update["generated"] if r["status"] == "skipped")
+    assert "no provider" in video_result["reason"]
     # Both assets were still persisted.
     assert len(update["asset_ids"]) == 2
-    # No version was created for the skipped copy asset.
-    copy_asset_id = copy_result["asset_id"]
-    assert await repos.versions.list(workspace_id=ws.id, filters={"asset_id": copy_asset_id}) == []
+    # No version was created for the skipped video asset.
+    video_asset_id = video_result["asset_id"]
+    assert await repos.versions.list(workspace_id=ws.id, filters={"asset_id": video_asset_id}) == []
 
 
 async def test_generate_requires_workspace_and_project(repos, providers, storage):
@@ -163,12 +164,18 @@ async def test_full_pipeline_plan_then_generate(repos, providers, storage):
     )
 
     assert result["error"] is None
-    # Plan produced two assets; generate produced one image version + one skip.
+    # Plan produced two assets; both image and copy now have providers.
     assert len(result["planned_assets"]) == 2
     statuses = sorted(r["status"] for r in result["generated"])
-    assert statuses == ["generated", "skipped"]
+    assert statuses == ["generated", "generated"]
 
-    # An image Version exists in the store with real bytes.
-    generated = next(r for r in result["generated"] if r["status"] == "generated")
-    data = await storage.load(generated["output_ref"])
-    assert data.startswith(PNG_SIGNATURE)
+    # The image Version exists in the store with real PNG bytes.
+    png_ref = next(
+        r["output_ref"] for r in result["generated"] if r["output_ref"].endswith(".png")
+    )
+    assert (await storage.load(png_ref)).startswith(PNG_SIGNATURE)
+    # The copy Version stored real text bytes.
+    txt_ref = next(
+        r["output_ref"] for r in result["generated"] if r["output_ref"].endswith(".txt")
+    )
+    assert (await storage.load(txt_ref)).decode("utf-8").startswith("[stub copy]")

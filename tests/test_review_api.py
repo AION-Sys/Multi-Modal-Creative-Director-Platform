@@ -46,20 +46,22 @@ def test_run_review_approve_flow(client):
     assert run.status_code == 200
     body = run.json()
     assert body["status"] == "awaiting_review"
+    # Both image and copy generate now.
     statuses = sorted(g["status"] for g in body["generated"])
-    assert statuses == ["generated", "skipped"]
+    assert statuses == ["generated", "generated"]
 
-    # One asset awaits review (the image).
+    # Both assets await review.
     review = client.get(f"/workspaces/{ws}/review?project_id={proj}", headers=AUTH)
     items = review.json()
-    assert len(items) == 1
-    assert items[0]["asset"]["modality"] == "image"
-    version_id = items[0]["version"]["id"]
+    assert {i["asset"]["modality"] for i in items} == {"image", "copy"}
+    image_item = next(i for i in items if i["asset"]["modality"] == "image")
+    version_id = image_item["version"]["id"]
 
-    # Approve it — asset locks, no longer pending.
+    # Approve the image — its asset locks, only the copy remains pending.
     approved = client.post(f"/workspaces/{ws}/versions/{version_id}/approve", headers=AUTH)
     assert approved.json()["status"] == "approved"
-    assert client.get(f"/workspaces/{ws}/review?project_id={proj}", headers=AUTH).json() == []
+    remaining = client.get(f"/workspaces/{ws}/review?project_id={proj}", headers=AUTH).json()
+    assert [i["asset"]["modality"] for i in remaining] == ["copy"]
 
 
 def test_regenerate_endpoint_branches_version(client):

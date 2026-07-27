@@ -131,9 +131,9 @@ async def test_full_pipeline_plan_generate_critique(repos, providers, storage):
         }
     )
     assert result["error"] is None
-    # One image was generated and therefore critiqued; copy was skipped.
-    assert len(result["critiques"]) == 1
-    assert result["critiques"][0]["verdict"] == "pass"
+    # Both image and copy were generated and therefore critiqued.
+    assert len(result["critiques"]) == 2
+    assert all(c["verdict"] == "pass" for c in result["critiques"])
 
 
 # --- AnthropicDirector.critique with an injected stub client (no network) ---
