@@ -55,11 +55,36 @@ Configuration is entirely env-driven (see `.env.example`): swap
 `BACKEND=memory|airtable`, `IMAGE_PROVIDER=stub|openai`, etc. without code
 changes.
 
+### Running the API
+
+```bash
+uvicorn creative_director.api.app:app --reload
+```
+
+All resource endpoints require the `X-API-Key` header (matching `APP_API_KEY`);
+`/health` and `/docs` are open. Resources are nested for tenant isolation:
+
+```
+POST   /workspaces
+GET    /workspaces/{workspace_id}/projects
+POST   /workspaces/{workspace_id}/assets          # body carries project_id
+GET    /workspaces/{workspace_id}/versions?asset_id=...
+```
+
+### Provisioning Airtable (when BACKEND=airtable)
+
+Set `AIRTABLE_API_KEY` + `AIRTABLE_BASE_ID`, then create the tables from the
+schema-as-code definitions (idempotent):
+
+```bash
+python -m creative_director.repositories.airtable.bootstrap
+```
+
 ## Build order / status
 
 1. ✅ Data model + domain layer
 2. ✅ Project scaffold (structure, deps, config)
-3. ⬜ Airtable schema (schema-as-code + bootstrap) + CRUD for Workspace/Project/Asset/Version
+3. ✅ Repository interface + memory & Airtable backends (schema-as-code + bootstrap) + FastAPI CRUD
 4. ⬜ Provider interface + OpenAI `gpt-image-1` image provider + storage abstraction
 5. ⬜ Director agent: Plan node (brief → asset plan), verified in isolation
 6. ⬜ Generate node → image provider

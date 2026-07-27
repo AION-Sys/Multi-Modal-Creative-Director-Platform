@@ -19,6 +19,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,  # allow Settings(app_api_key=...) as well as the env alias
     )
 
     # --- API auth ---

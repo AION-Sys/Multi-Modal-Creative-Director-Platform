@@ -7,14 +7,8 @@ All values are lowercase strings for portable storage.
 
 from __future__ import annotations
 
-from enum import Enum
-
-
-class StrEnum(str, Enum):
-    """str-backed enum so values serialize as plain strings in JSON/Airtable."""
-
-    def __str__(self) -> str:  # pragma: no cover - trivial
-        return self.value
+# StrEnum (3.11+) serializes members as their plain string value in JSON/Airtable.
+from enum import StrEnum
 
 
 class WorkspaceKind(StrEnum):
